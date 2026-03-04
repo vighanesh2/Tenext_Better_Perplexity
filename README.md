@@ -1,5 +1,17 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Auth (Supabase)
+
+Sign-in and sign-up use Supabase with email and password.
+
+1. Create a [Supabase](https://supabase.com) project and add to `.env.local`:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   ```
+
+2. Add your app URL to **Redirect URLs** in Supabase: Authentication → URL Configuration (e.g. `http://localhost:3000/auth/callback` for local dev).
+
 ## Getting Started
 
 First, run the development server:

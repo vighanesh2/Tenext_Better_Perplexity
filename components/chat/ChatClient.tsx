@@ -1,7 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import type { Message, Source } from "./types";
+import { Navbar } from "@/components/ui/mini-navbar";
+
+const HeroWave = dynamic(() => import("@/components/hero/HeroWave").then((m) => m.HeroWave), {
+  ssr: false,
+});
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
@@ -14,84 +21,100 @@ function MessageBubble({ message }: { message: Message }) {
     (message.reasoningChain?.length ?? 0) > 0;
 
   return (
-    <div
-      className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
-    >
-      <div
-        className={`max-w-[85%] rounded-lg px-4 py-3 ${
-          isUser
-            ? "bg-neutral-800 text-white"
-            : "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-        }`}
-      >
-        {message.fromCache && !message.isStreaming && (
-          <p className="mb-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            Served from cache
-          </p>
-        )}
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
-          {message.content}
-          {message.isStreaming && (
-            <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-current" />
-          )}
-        </p>
-        {message.sources && message.sources.length > 0 && !message.isStreaming && (
-          <div className="mt-4 border-t border-neutral-200 pt-3 dark:border-neutral-700">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Sources
-            </p>
-            <ul className="space-y-2">
-              {message.sources.map((source, i) => (
-                <li key={i} className="text-sm">
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    {source.title}
-                  </a>
-                  {source.snippet && (
-                    <p className="mt-0.5 text-neutral-600 dark:text-neutral-400">
-                      {source.snippet}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+    <div className={`w-full ${isUser ? "flex justify-center" : ""}`}>
+      <div className={`w-full max-w-3xl ${isUser ? "text-center" : ""}`}>
+        {isUser ? (
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-5 py-2.5 text-[18px] text-gray-200">
+            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>{message.content}</span>
+          </div>
+        ) : (
+          <>
+            {message.fromCache && !message.isStreaming && (
+              <p className="mb-4 text-sm font-medium text-emerald-400">
+                Served from cache
+              </p>
+            )}
+            <article className="prose prose-invert prose-lg max-w-none">
+              <div className="markdown-output text-[19px] leading-[1.75] [&_p]:mb-4 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:mb-4 [&_ul]:pl-6 [&_ul]:space-y-2 [&_li]:text-[19px] [&_ol]:list-decimal [&_ol]:mb-4 [&_ol]:pl-6 [&_ol]:space-y-2 [&_strong]:font-semibold [&_strong]:text-white [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-3">
+                {message.isStreaming ? (
+                  <>
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <span className="ml-0.5 inline-block h-5 w-0.5 animate-pulse bg-current align-middle" />
+                  </>
+                ) : (
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                )}
+              </div>
+            </article>
+            {message.sources && message.sources.length > 0 && !message.isStreaming && (
+              <div className="mt-8 pt-6 border-t border-white/10">
+                <h3 className="text-[16px] font-semibold uppercase tracking-wider text-gray-400 mb-4">
+                  Sources
+                </h3>
+                <div className="grid gap-3">
+                  {message.sources.map((source, i) => (
+                    <a
+                      key={i}
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-colors group"
+                    >
+                      <span className="flex-shrink-0 w-7 h-7 rounded-full bg-white/10 text-[13px] font-medium text-gray-300 flex items-center justify-center group-hover:bg-[#1f3dbc]/50 group-hover:text-white">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[17px] font-medium text-[#7ba3ff] group-hover:text-[#a3c4ff] group-hover:underline line-clamp-2">
+                          {source.title}
+                        </p>
+                        {source.snippet && (
+                          <p className="mt-1 text-[15px] text-gray-400 leading-snug line-clamp-2">
+                            {source.snippet}
+                          </p>
+                        )}
+                      </div>
+                      <svg className="w-4 h-4 text-gray-500 flex-shrink-0 mt-1 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  ))}
+                </div>
             {hasExplainability && (
-              <div className="mt-3">
+              <div className="mt-4">
                 <button
                   type="button"
                   onClick={() => setShowReasoning((v) => !v)}
-                  className="text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                  className="text-[15px] font-medium text-gray-400 hover:text-gray-200"
                 >
                   {showReasoning ? "Hide" : "Explain reasoning"}
                 </button>
                 {showReasoning && (
-                  <div className="mt-3 space-y-3 rounded border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/50">
+                  <div className="mt-4 space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
                     <div>
-                      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                      <p className="mb-2 text-[14px] font-semibold uppercase tracking-wider text-gray-400">
                         Reasoning chain
                       </p>
-                      <ol className="list-inside list-decimal space-y-1 text-sm text-neutral-700 dark:text-neutral-300">
+                      <ol className="list-inside list-decimal space-y-2 text-[16px] text-gray-300 leading-relaxed">
                         {message.reasoningChain?.map((step, i) => (
                           <li key={i}>{step}</li>
                         ))}
                       </ol>
                     </div>
                     <div>
-                      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                      <p className="mb-2 text-[14px] font-semibold uppercase tracking-wider text-gray-400">
                         Key source excerpts
                       </p>
-                      <ul className="space-y-2">
+                      <ul className="space-y-3">
                         {message.sources?.map((source, i) => (
-                          <li key={i} className="border-l-2 border-neutral-200 pl-2 text-sm dark:border-neutral-600">
-                            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                          <li key={i} className="border-l-2 border-white/10 pl-4 text-[16px]">
+                            <span className="font-medium text-gray-300">
                               {source.title}
                             </span>
                             {source.snippet && (
-                              <p className="mt-0.5 text-neutral-600 dark:text-neutral-400">
+                              <p className="mt-1 text-gray-400 text-[15px] leading-snug">
                                 {source.snippet}
                               </p>
                             )}
@@ -103,7 +126,9 @@ function MessageBubble({ message }: { message: Message }) {
                 )}
               </div>
             )}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -114,6 +139,7 @@ export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [researchMode, setResearchMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -267,9 +293,107 @@ export default function ChatClient() {
     setIsStreaming(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = input.trim();
+  const streamChatResponse = async (userContent: string) => {
+    const assistantId = crypto.randomUUID();
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      },
+    ]);
+
+    try {
+      const history = messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: userContent, messages: history }),
+      });
+
+      if (!res.ok) {
+        throw new Error(res.statusText || "Chat failed");
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line) as {
+              type?: string;
+              content?: string;
+              error?: string;
+            };
+            if (parsed.type === "chunk" && typeof parsed.content === "string") {
+              fullContent += parsed.content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: fullContent, isStreaming: true }
+                    : m
+                )
+              );
+            } else if (parsed.type === "error" || parsed.error) {
+              throw new Error(parsed.error ?? "Chat failed");
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer) as { type?: string; content?: string; error?: string };
+          if (parsed.type === "chunk" && typeof parsed.content === "string") {
+            fullContent += parsed.content;
+          } else if (parsed.type === "error" || parsed.error) {
+            throw new Error(parsed.error ?? "Chat failed");
+          }
+        } catch {
+          /* ignore parse errors */
+        }
+      }
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: fullContent, isStreaming: false } : m
+        )
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Chat failed.";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: `Error: ${message}`, isStreaming: false } : m
+        )
+      );
+    }
+    setIsStreaming(false);
+  };
+
+  const handlePromptSubmit = (value: string) => {
+    const trimmed = value.trim();
     if (!trimmed || isStreaming) return;
 
     const userMessage: Message = {
@@ -278,56 +402,103 @@ export default function ChatClient() {
       content: trimmed,
     };
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
     setIsStreaming(true);
-    streamResearchResponse(trimmed);
+    if (researchMode) {
+      streamResearchResponse(trimmed);
+    } else {
+      streamChatResponse(trimmed);
+    }
   };
 
-  return (
-    <div className="flex h-screen flex-col">
-      <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-          {messages.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-              <h1 className="text-xl font-medium text-neutral-800 dark:text-neutral-200">
-                Research Assistant
-              </h1>
-              <p className="mt-2 max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
-                Ask a question to get started. Responses include structured
-                source citations.
-              </p>
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))
-          )}
-          <div ref={bottomRef} />
-        </div>
-      </div>
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed || isStreaming) return;
 
-      <div className="border-t border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950">
+    handlePromptSubmit(trimmed);
+    setInput("");
+  };
+
+  const chatContent = (
+    <div className="flex h-screen flex-col bg-[#0a0a0f]">
+      <div className="flex flex-1 flex-col min-h-0">
+        <Navbar onBack={() => setMessages([])} />
+        <div className="flex flex-1 flex-col overflow-y-auto px-4 pt-20 pb-6 min-h-0">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-10">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        <div className="border-t border-white/5 bg-[#0a0a0f] px-4 py-4 shrink-0">
+        <div className="mx-auto max-w-3xl mb-3 flex items-center gap-2">
+          <span className="text-[13px] text-gray-500 mr-2">Mode:</span>
+          <button
+            type="button"
+            onClick={() => setResearchMode(false)}
+            className={`rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors ${
+              !researchMode
+                ? "bg-white/10 text-white"
+                : "text-gray-400 hover:text-gray-300"
+            }`}
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => setResearchMode(true)}
+            className={`rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors ${
+              researchMode
+                ? "bg-white/10 text-white"
+                : "text-gray-400 hover:text-gray-300"
+            }`}
+          >
+            Research
+          </button>
+        </div>
         <form
           onSubmit={handleSubmit}
-          className="mx-auto flex max-w-2xl gap-3"
+          className="mx-auto flex max-w-3xl gap-3"
         >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
-            disabled={isStreaming}
-            className="flex-1 rounded-lg border border-neutral-300 bg-white px-4 py-3 text-[15px] text-neutral-900 placeholder-neutral-400 focus:border-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-500 disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder-neutral-500"
-          />
+          <div className="relative flex-1 rounded-2xl p-[2px] bg-gradient-to-br from-white/10 via-white/5 to-black/20">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={researchMode ? "Describe what you want to research..." : "Ask anything..."}
+              disabled={isStreaming}
+              className="w-full rounded-2xl bg-[rgba(15,15,20,0.55)] border border-white/10 px-5 py-3.5 text-[17px] text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#1f3dbc]/40 focus:border-[#1f3dbc]/40 backdrop-blur-md disabled:opacity-50"
+            />
+          </div>
           <button
             type="submit"
             disabled={isStreaming || !input.trim()}
-            className="rounded-lg bg-neutral-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#f0f2ff] text-black hover:bg-white transition-colors disabled:opacity-50 shrink-0"
           >
-            {isStreaming ? "..." : "Send"}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+              <path d="M7 17L17 7" />
+              <path d="M7 7h10v10" />
+            </svg>
           </button>
         </form>
+        </div>
       </div>
     </div>
+  );
+
+  if (messages.length > 0) {
+    return chatContent;
+  }
+
+  return (
+    <HeroWave
+      title="Research with AI."
+      subtitle="Ask anything. Use Chat for quick answers, or Research for in-depth analysis with sources."
+      onPromptSubmit={handlePromptSubmit}
+      researchMode={researchMode}
+      onResearchModeChange={setResearchMode}
+    />
   );
 }
