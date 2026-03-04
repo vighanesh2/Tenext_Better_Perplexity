@@ -13,4 +13,5 @@ export interface Message {
   sources?: Source[];
   isStreaming?: boolean;
   fromCache?: boolean;
+  reasoningChain?: string[];
 }

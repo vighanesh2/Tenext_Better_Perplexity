@@ -41,9 +41,12 @@ export async function POST(request: NextRequest) {
         try {
           const cached = await getCached(trimmed);
           if (cached) {
+            const data = cached.reasoningChain
+              ? cached
+              : { ...cached, reasoningChain: ["Served from cache (previously ran full pipeline)."] };
             streamChunk(
               controller,
-              JSON.stringify({ type: "result", data: cached, fromCache: true }) + "\n"
+              JSON.stringify({ type: "result", data, fromCache: true }) + "\n"
             );
             controller.close();
             return;
@@ -78,6 +81,15 @@ export async function POST(request: NextRequest) {
           const confidence =
             Math.round((confidenceScore / 10) * 100) / 100;
 
+          const reasoningChain = [
+            `Decomposed query into ${subqueries.length} subquer${subqueries.length === 1 ? "y" : "ies"}.`,
+            `Retrieved ${topSources.length} sources in parallel from search.`,
+            `Synthesized evidence into summary and insights.`,
+            synthesis.contradictions.length > 0
+              ? `Flagged ${synthesis.contradictions.length} contradiction${synthesis.contradictions.length === 1 ? "" : "s"} across sources.`
+              : "No contradictions flagged across sources.",
+          ];
+
           const result = {
             summary: synthesis.summary,
             keyInsights: synthesis.keyInsights,
@@ -89,6 +101,7 @@ export async function POST(request: NextRequest) {
               snippet: r.snippet,
             })),
             limitations: synthesis.limitations,
+            reasoningChain,
           };
 
           await setCached(trimmed, result);

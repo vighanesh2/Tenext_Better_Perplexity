@@ -5,6 +5,13 @@ import type { Message, Source } from "./types";
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const [showReasoning, setShowReasoning] = useState(false);
+
+  const hasExplainability =
+    !message.isStreaming &&
+    message.sources &&
+    message.sources.length > 0 &&
+    (message.reasoningChain?.length ?? 0) > 0;
 
   return (
     <div
@@ -52,6 +59,50 @@ function MessageBubble({ message }: { message: Message }) {
                 </li>
               ))}
             </ul>
+            {hasExplainability && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowReasoning((v) => !v)}
+                  className="text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                >
+                  {showReasoning ? "Hide" : "Explain reasoning"}
+                </button>
+                {showReasoning && (
+                  <div className="mt-3 space-y-3 rounded border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/50">
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Reasoning chain
+                      </p>
+                      <ol className="list-inside list-decimal space-y-1 text-sm text-neutral-700 dark:text-neutral-300">
+                        {message.reasoningChain?.map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Key source excerpts
+                      </p>
+                      <ul className="space-y-2">
+                        {message.sources?.map((source, i) => (
+                          <li key={i} className="border-l-2 border-neutral-200 pl-2 text-sm dark:border-neutral-600">
+                            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                              {source.title}
+                            </span>
+                            {source.snippet && (
+                              <p className="mt-0.5 text-neutral-600 dark:text-neutral-400">
+                                {source.snippet}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -121,6 +172,7 @@ export default function ChatClient() {
                 confidence: number;
                 sources: Source[];
                 limitations: string[];
+                reasoningChain?: string[];
               };
               fromCache?: boolean;
               error?: string;
@@ -140,7 +192,7 @@ export default function ChatClient() {
                 )
               );
             } else if (parsed.type === "result" && parsed.data) {
-              const { summary, keyInsights, contradictions, sources, limitations } =
+              const { summary, keyInsights, contradictions, sources, limitations, reasoningChain } =
                 parsed.data;
               const parts: string[] = [summary];
               if (keyInsights.length > 0) {
@@ -159,6 +211,7 @@ export default function ChatClient() {
                         ...m,
                         content: parts.join(""),
                         sources,
+                        reasoningChain: reasoningChain ?? [],
                         isStreaming: false,
                         fromCache: parsed.fromCache ?? false,
                       }
@@ -183,8 +236,8 @@ export default function ChatClient() {
             error?: string;
           };
           if (parsed.type === "result" && parsed.data) {
-            const parsedWithCache = parsed as { data: typeof parsed.data; fromCache?: boolean };
-            const { summary, keyInsights, contradictions, sources, limitations } = parsedWithCache.data;
+            const parsedWithCache = parsed as { data: typeof parsed.data & { reasoningChain?: string[] }; fromCache?: boolean };
+            const { summary, keyInsights, contradictions, sources, limitations, reasoningChain } = parsedWithCache.data;
             const parts = [summary];
             if (keyInsights.length) parts.push("\n\n**Key insights:**\n" + keyInsights.map((k) => `• ${k}`).join("\n"));
             if (contradictions.length) parts.push("\n\n**Contradictions:**\n" + contradictions.map((c) => `• ${c}`).join("\n"));
@@ -192,7 +245,7 @@ export default function ChatClient() {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
-                  ? { ...m, content: parts.join(""), sources, isStreaming: false, fromCache: parsedWithCache.fromCache ?? false }
+                  ? { ...m, content: parts.join(""), sources, reasoningChain: reasoningChain ?? [], isStreaming: false, fromCache: parsedWithCache.fromCache ?? false }
                   : m
               )
             );

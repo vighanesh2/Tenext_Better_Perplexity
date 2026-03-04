@@ -27,6 +27,7 @@ export interface CachedResearchResult {
   confidence: number;
   sources: Array<{ title: string; url: string; snippet?: string }>;
   limitations: string[];
+  reasoningChain: string[];
 }
 
 export async function getCached(
