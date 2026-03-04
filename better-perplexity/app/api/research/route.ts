@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { calculateConfidence } from "@/lib/confidence";
+import { getCached, setCached } from "@/lib/cache";
 import { decomposeQuery } from "@/lib/decompose";
 import { search } from "@/lib/search";
+import { synthesizeResearch } from "@/lib/synthesize";
 
 function deduplicateByUrl<T extends { url: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -10,6 +13,13 @@ function deduplicateByUrl<T extends { url: string }>(items: T[]): T[] {
     seen.add(normalized);
     return true;
   });
+}
+
+function streamChunk(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  data: string
+) {
+  controller.enqueue(new TextEncoder().encode(data));
 }
 
 export async function POST(request: NextRequest) {
@@ -26,43 +36,91 @@ export async function POST(request: NextRequest) {
 
     const trimmed = query.trim();
 
-    // 1. Decompose query into subqueries
-    const subqueries = await decomposeQuery(trimmed);
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const cached = await getCached(trimmed);
+          if (cached) {
+            streamChunk(
+              controller,
+              JSON.stringify({ type: "result", data: cached, fromCache: true }) + "\n"
+            );
+            controller.close();
+            return;
+          }
 
-    // 2. Run searches in parallel
-    const resultsArrays = await Promise.all(
-      subqueries.map((sub) => search(sub))
+          streamChunk(
+            controller,
+            JSON.stringify({ type: "status", message: "Decomposing query…" }) + "\n"
+          );
+
+          const subqueries = await decomposeQuery(trimmed);
+
+          streamChunk(
+            controller,
+            JSON.stringify({ type: "status", message: "Retrieving sources…" }) + "\n"
+          );
+
+          const resultsArrays = await Promise.all(
+            subqueries.map((sub) => search(sub))
+          );
+          const combined = resultsArrays.flat();
+          const deduplicated = deduplicateByUrl(combined);
+          const topSources = deduplicated.slice(0, 8);
+
+          streamChunk(
+            controller,
+            JSON.stringify({ type: "status", message: "Synthesizing analysis…" }) + "\n"
+          );
+
+          const synthesis = await synthesizeResearch(trimmed, topSources);
+          const confidenceScore = calculateConfidence(topSources, synthesis);
+          const confidence =
+            Math.round((confidenceScore / 10) * 100) / 100;
+
+          const result = {
+            summary: synthesis.summary,
+            keyInsights: synthesis.keyInsights,
+            contradictions: synthesis.contradictions,
+            confidence,
+            sources: topSources.map((r) => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.snippet,
+            })),
+            limitations: synthesis.limitations,
+          };
+
+          await setCached(trimmed, result);
+
+          streamChunk(
+            controller,
+            JSON.stringify({ type: "result", data: result, fromCache: false }) + "\n"
+          );
+          controller.close();
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Research failed.";
+          streamChunk(
+            controller,
+            JSON.stringify({ type: "error", error: message }) + "\n"
+          );
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
     );
-
-    // 3. Combine all results
-    const combined = resultsArrays.flat();
-
-    // 4. Remove duplicate URLs
-    const deduplicated = deduplicateByUrl(combined);
-
-    // 5. Limit to top 8 sources
-    const sources = deduplicated.slice(0, 8).map((r) => ({
-      title: r.title,
-      url: r.url,
-      snippet: r.snippet,
-    }));
-
-    // Placeholder for synthesis (step 7+)
-    const response = {
-      summary: `Research results for: "${trimmed}". Synthesis step not yet implemented.`,
-      keyInsights: [
-        "First key insight based on retrieved sources",
-        "Second notable finding",
-        "Third important point",
-      ],
-      contradictions: ["Some sources disagree on this aspect"],
-      confidence: 0.75,
-      sources,
-    };
-
-    return NextResponse.json(response);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Research failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

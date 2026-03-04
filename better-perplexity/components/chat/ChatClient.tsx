@@ -3,11 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import type { Message, Source } from "./types";
 
-const MOCK_SOURCES: Source[] = [
-  { title: "Research paper on topic", url: "https://example.com/paper", snippet: "Relevant excerpt from the source..." },
-  { title: "Documentation reference", url: "https://example.com/docs", snippet: "Another relevant snippet..." },
-];
-
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
 
@@ -22,6 +17,11 @@ function MessageBubble({ message }: { message: Message }) {
             : "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
         }`}
       >
+        {message.fromCache && !message.isStreaming && (
+          <p className="mb-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            Served from cache
+          </p>
+        )}
         <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
           {message.content}
           {message.isStreaming && (
@@ -69,10 +69,9 @@ export default function ChatClient() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const simulateStreamingResponse = async (userContent: string) => {
+  const streamResearchResponse = async (userContent: string) => {
     const assistantId = crypto.randomUUID();
-    const sampleResponse =
-      "This is a simulated streaming response. In a real implementation, this would connect to an API and stream tokens as they arrive. The design supports both real-time streaming and structured source citations below each response.";
+    let statusMessages: string[] = [];
 
     setMessages((prev) => [
       ...prev,
@@ -84,29 +83,134 @@ export default function ChatClient() {
       },
     ]);
 
-    for (let i = 0; i <= sampleResponse.length; i += 2) {
-      await new Promise((r) => setTimeout(r, 20));
+    try {
+      const res = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: userContent }),
+      });
+
+      if (!res.ok) {
+        throw new Error(res.statusText || "Research failed");
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line) as {
+              type?: string;
+              message?: string;
+              data?: {
+                summary: string;
+                keyInsights: string[];
+                contradictions: string[];
+                confidence: number;
+                sources: Source[];
+                limitations: string[];
+              };
+              fromCache?: boolean;
+              error?: string;
+            };
+
+            if (parsed.type === "status" && parsed.message) {
+              statusMessages = [...statusMessages, parsed.message];
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: statusMessages.join("\n"),
+                        isStreaming: true,
+                      }
+                    : m
+                )
+              );
+            } else if (parsed.type === "result" && parsed.data) {
+              const { summary, keyInsights, contradictions, sources, limitations } =
+                parsed.data;
+              const parts: string[] = [summary];
+              if (keyInsights.length > 0) {
+                parts.push("\n\n**Key insights:**\n" + keyInsights.map((k) => `• ${k}`).join("\n"));
+              }
+              if (contradictions.length > 0) {
+                parts.push("\n\n**Contradictions:**\n" + contradictions.map((c) => `• ${c}`).join("\n"));
+              }
+              if (limitations.length > 0) {
+                parts.push("\n\n**Limitations:**\n" + limitations.map((l) => `• ${l}`).join("\n"));
+              }
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: parts.join(""),
+                        sources,
+                        isStreaming: false,
+                        fromCache: parsed.fromCache ?? false,
+                      }
+                    : m
+                )
+              );
+            } else if (parsed.type === "error" || parsed.error) {
+              throw new Error(parsed.error ?? "Research failed");
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer) as {
+            type?: string;
+            data?: { summary: string; keyInsights: string[]; contradictions: string[]; sources: Source[]; limitations: string[] };
+            error?: string;
+          };
+          if (parsed.type === "result" && parsed.data) {
+            const parsedWithCache = parsed as { data: typeof parsed.data; fromCache?: boolean };
+            const { summary, keyInsights, contradictions, sources, limitations } = parsedWithCache.data;
+            const parts = [summary];
+            if (keyInsights.length) parts.push("\n\n**Key insights:**\n" + keyInsights.map((k) => `• ${k}`).join("\n"));
+            if (contradictions.length) parts.push("\n\n**Contradictions:**\n" + contradictions.map((c) => `• ${c}`).join("\n"));
+            if (limitations.length) parts.push("\n\n**Limitations:**\n" + limitations.map((l) => `• ${l}`).join("\n"));
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: parts.join(""), sources, isStreaming: false, fromCache: parsedWithCache.fromCache ?? false }
+                  : m
+              )
+            );
+          }
+        } catch {
+          /* ignore parse errors for trailing buffer */
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Research failed.";
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: sampleResponse.slice(0, i), isStreaming: true }
+            ? { ...m, content: `Error: ${message}`, isStreaming: false }
             : m
         )
       );
     }
-
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === assistantId
-          ? {
-              ...m,
-              content: sampleResponse,
-              sources: MOCK_SOURCES,
-              isStreaming: false,
-            }
-          : m
-      )
-    );
     setIsStreaming(false);
   };
 
@@ -123,7 +227,7 @@ export default function ChatClient() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsStreaming(true);
-    simulateStreamingResponse(trimmed);
+    streamResearchResponse(trimmed);
   };
 
   return (

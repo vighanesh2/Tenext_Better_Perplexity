@@ -12,4 +12,5 @@ export interface Message {
   content: string;
   sources?: Source[];
   isStreaming?: boolean;
+  fromCache?: boolean;
 }
