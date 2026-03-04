@@ -34,3 +34,19 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### If you see 404 NOT_FOUND after deploy
+
+The app lives at the **repository root** (no subfolder). In Vercel:
+
+1. **Project Settings → General → Root Directory**  
+   Leave **empty** (or `.`). If this is set to `better-perplexity` or any subfolder, clear it and save.
+
+2. **Framework Preset**  
+   Should be **Next.js**. If the project was created when the app was in a subfolder, Vercel may have picked "Other"; set it to Next.js.
+
+3. **Build & Output**  
+   Do **not** set a custom Output Directory. Let Vercel use the Next.js default.
+
+4. **Redeploy**  
+   Push your latest commit (with the flattened structure), then in Vercel: Deployments → ⋮ on latest → **Redeploy** (or trigger a new deploy from your Git provider).
