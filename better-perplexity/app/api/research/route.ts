@@ -1,4 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decomposeQuery } from "@/lib/decompose";
+import { search } from "@/lib/search";
+
+function deduplicateByUrl<T extends { url: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const normalized = item.url.toLowerCase().trim();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,29 +24,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Placeholder response
+    const trimmed = query.trim();
+
+    // 1. Decompose query into subqueries
+    const subqueries = await decomposeQuery(trimmed);
+
+    // 2. Run searches in parallel
+    const resultsArrays = await Promise.all(
+      subqueries.map((sub) => search(sub))
+    );
+
+    // 3. Combine all results
+    const combined = resultsArrays.flat();
+
+    // 4. Remove duplicate URLs
+    const deduplicated = deduplicateByUrl(combined);
+
+    // 5. Limit to top 8 sources
+    const sources = deduplicated.slice(0, 8).map((r) => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.snippet,
+    }));
+
+    // Placeholder for synthesis (step 7+)
     const response = {
-      summary: `Placeholder summary for: "${query}". Replace with real research logic.`,
+      summary: `Research results for: "${trimmed}". Synthesis step not yet implemented.`,
       keyInsights: [
-        "First key insight based on the query",
+        "First key insight based on retrieved sources",
         "Second notable finding",
         "Third important point",
       ],
-      contradictions: [
-        "Some sources disagree on this aspect",
-      ],
+      contradictions: ["Some sources disagree on this aspect"],
       confidence: 0.75,
-      sources: [
-        { title: "Example Source 1", url: "https://example.com/source-1" },
-        { title: "Example Source 2", url: "https://example.com/source-2" },
-      ],
+      sources,
     };
 
     return NextResponse.json(response);
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body" },
-      { status: 400 }
-    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Research failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
