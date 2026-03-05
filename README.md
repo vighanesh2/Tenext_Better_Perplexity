@@ -1,64 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Better Perplexity
 
-## Auth (Supabase)
+A [Next.js](https://nextjs.org) app with AI-powered search, research, and system design. Auth is handled with [Supabase](https://supabase.com) (email/password).
 
-Sign-in and sign-up use Supabase with email and password.
+---
 
-1. Create a [Supabase](https://supabase.com) project and add to `.env.local`:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=your_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-   ```
+## Prerequisites
 
-2. Add your app URL to **Redirect URLs** in Supabase: Authentication → URL Configuration (e.g. `http://localhost:3000/auth/callback` for local dev).
+- **Node.js** 18+ and **npm** (or yarn/pnpm/bun)
+- **Supabase** project (for sign-in/sign-up)
+- **Groq** API key (for chat, intent, research, system design)
+- **Tavily** API key (for web search / research)
+- **Redis** (optional; used for caching; defaults to `redis://localhost:6379`)
 
-## Getting Started
+---
 
-First, run the development server:
+## Quick start
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/YOUR_ORG/Tenext_Better_Perplexity.git
+cd Tenext_Better_Perplexity
+npm install
+```
+
+### 2. Environment variables
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` and set at least:
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `GROQ_API_KEY` | [Groq](https://console.groq.com) API key |
+| `TAVILY_API_KEY` | [Tavily](https://tavily.com) API key |
+| `REDIS_URL` | Optional; e.g. `redis://localhost:6379` |
+
+**Supabase redirect URL:** In Supabase → **Authentication → URL Configuration**, add your app URL (e.g. `http://localhost:3000/auth/callback` for local dev).
+
+### 3. Run the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Production build (optional)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## How to test / verify
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Lint:**  
+  ```bash
+  npm run lint
+  ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Build (typecheck + build):**  
+  ```bash
+  npm run build
+  ```
+  Ensures the app compiles and has no type errors.
+
+- **Manual smoke test:**  
+  With `npm run dev` running, open [http://localhost:3000](http://localhost:3000), sign in or sign up, and try a query.  
+  You can also hit the test API:  
+  `GET /api/test?q=your+query&mode=intent` (or `mode=research`, `mode=system_design`).
+
+---
+
+## Scripts
+
+| Command | Description |
+|--------|-------------|
+| `npm run dev` | Start dev server at [http://localhost:3000](http://localhost:3000) |
+| `npm run build` | Production build |
+| `npm run start` | Run production server (run `build` first) |
+| `npm run lint` | Run ESLint |
+
+---
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Push the repo to GitHub and import the project in [Vercel](https://vercel.com).
+2. Add the same environment variables in **Project → Settings → Environment Variables** (use the names from `.env.example`).
+3. In **Project Settings → General → Root Directory** leave **empty** (or `.`) so the app is at the repo root.
+4. Set **Framework Preset** to **Next.js** and deploy.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### If you see 404 after deploy
 
-### If you see 404 NOT_FOUND after deploy
+- **Root Directory** must be empty (or `.`), not a subfolder.
+- **Framework Preset** should be **Next.js**.
+- Do not set a custom **Output Directory**; use the Next.js default.
+- Redeploy after changing these settings.
 
-The app lives at the **repository root** (no subfolder). In Vercel:
+---
 
-1. **Project Settings → General → Root Directory**  
-   Leave **empty** (or `.`). If this is set to `better-perplexity` or any subfolder, clear it and save.
+## Learn more
 
-2. **Framework Preset**  
-   Should be **Next.js**. If the project was created when the app was in a subfolder, Vercel may have picked "Other"; set it to Next.js.
-
-3. **Build & Output**  
-   Do **not** set a custom Output Directory. Let Vercel use the Next.js default.
-
-4. **Redeploy**  
-   Push your latest commit (with the flattened structure), then in Vercel: Deployments → ⋮ on latest → **Redeploy** (or trigger a new deploy from your Git provider).
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Supabase Auth](https://supabase.com/docs/guides/auth)
