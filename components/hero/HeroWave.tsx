@@ -23,6 +23,8 @@ export type HeroWaveProps = {
   /** When provided, shows Chat vs Research mode toggle */
   researchMode?: boolean;
   onResearchModeChange?: (enabled: boolean) => void;
+  notebookOpen?: boolean;
+  onToggleNotebook?: () => void;
 };
 
 export function HeroWave({
@@ -37,6 +39,8 @@ export function HeroWave({
   children,
   researchMode = false,
   onResearchModeChange,
+  notebookOpen,
+  onToggleNotebook,
 }: HeroWaveProps) {
   const [prompt, setPrompt] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -800,7 +804,7 @@ export function HeroWave({
       style={{ position: "relative", width: "100%", height: "100vh", minHeight: "100vh", ...style }}
       aria-label="Animated hero"
     >
-      <Navbar />
+      <Navbar notebookOpen={notebookOpen} onToggleNotebook={onToggleNotebook} />
       <div
         style={{
           position: "absolute",
@@ -811,7 +815,7 @@ export function HeroWave({
           alignItems: children ? "stretch" : "center",
           justifyContent: children ? "stretch" : "center",
           pointerEvents: "none",
-          padding: children ? 0 : 24,
+          padding: children ? 0 : "24px 40px 24px 24px",
         }}
       >
         {children ? (

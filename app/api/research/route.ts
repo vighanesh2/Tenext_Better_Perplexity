@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calculateConfidence } from "@/lib/confidence";
-import { getCached, setCached } from "@/lib/cache";
+import OpenAI from "openai";
+import { classifyIntent } from "@/lib/intent";
 import { decomposeQuery } from "@/lib/decompose";
 import { search } from "@/lib/search";
 import { synthesizeResearch } from "@/lib/synthesize";
+import { calculateConfidence } from "@/lib/confidence";
+import { generateArchitecture, generateMermaidDiagram, reflectBottlenecks } from "@/lib/systemDesignPipeline";
 
 function deduplicateByUrl<T extends { url: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -15,11 +17,36 @@ function deduplicateByUrl<T extends { url: string }>(items: T[]): T[] {
   });
 }
 
-function streamChunk(
+function streamLine(
   controller: ReadableStreamDefaultController<Uint8Array>,
-  data: string
+  data: object
 ) {
-  controller.enqueue(new TextEncoder().encode(data));
+  controller.enqueue(new TextEncoder().encode(JSON.stringify(data) + "\n"));
+}
+
+async function getGeneralAnswer(query: string): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new Error("GROQ_API_KEY is not set.");
+  }
+  const client = new OpenAI({
+    apiKey,
+    baseURL: "https://api.groq.com/openai/v1",
+  });
+  const response = await client.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a helpful assistant. Answer questions concisely. Be direct and informative. Use markdown when helpful.",
+      },
+      { role: "user", content: query },
+    ],
+    temperature: 0.5,
+    max_tokens: 1024,
+  });
+  return response?.choices?.[0]?.message?.content?.trim() ?? "";
 }
 
 export async function POST(request: NextRequest) {
@@ -39,85 +66,80 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const cached = await getCached(trimmed);
-          if (cached) {
-            const data = cached.reasoningChain
-              ? cached
-              : { ...cached, reasoningChain: ["Served from cache (previously ran full pipeline)."] };
-            streamChunk(
-              controller,
-              JSON.stringify({ type: "result", data, fromCache: true }) + "\n"
-            );
+          streamLine(controller, { type: "status", message: "Classifying intent…" });
+          const intent = await classifyIntent(trimmed);
+
+          if (intent === "research") {
+            streamLine(controller, { type: "status", message: "Decomposing query…" });
+            const subqueries = await decomposeQuery(trimmed);
+            for (let i = 0; i < subqueries.length; i++) {
+              streamLine(controller, {
+                type: "trace",
+                step: { type: "query", label: `Query ${i + 1}`, text: subqueries[i] },
+              });
+            }
+            const resultsArrays = await Promise.all(subqueries.map((q) => search(q)));
+            const combined = resultsArrays.flat();
+            const deduplicated = deduplicateByUrl(combined);
+            const topSources = deduplicated.slice(0, 5);
+            for (const s of topSources) {
+              streamLine(controller, { type: "trace", step: { type: "reading", title: s.title } });
+            }
+            if (topSources.length === 0) {
+              streamLine(controller, {
+                type: "result",
+                data: {
+                  mode: "research",
+                  summary: "No sources found for this query.",
+                  keyInsights: [],
+                  contradictions: [],
+                  confidence: 0,
+                  sources: [],
+                },
+              });
+              controller.close();
+              return;
+            }
+            const synthesis = await synthesizeResearch(trimmed, topSources);
+            const confidenceScore = calculateConfidence(topSources, synthesis);
+            const confidence = Math.round((confidenceScore / 10) * 100) / 100;
+            streamLine(controller, {
+              type: "result",
+              data: {
+                mode: "research",
+                summary: synthesis.summary,
+                keyInsights: synthesis.keyInsights,
+                contradictions: synthesis.contradictions,
+                confidence,
+                sources: topSources.map((s) => ({ title: s.title, url: s.url })),
+              },
+            });
             controller.close();
             return;
           }
 
-          streamChunk(
-            controller,
-            JSON.stringify({ type: "status", message: "Decomposing query…" }) + "\n"
-          );
+          if (intent === "system_design") {
+            streamLine(controller, { type: "status", message: "Generating architecture…" });
+            const arch = await generateArchitecture(trimmed);
+            streamLine(controller, { type: "status", message: "Calculating scaling math…" });
+            streamLine(controller, { type: "status", message: "Reflecting bottlenecks…" });
+            const reflectionFindings = await reflectBottlenecks(arch);
+            arch.bottlenecks = [...arch.bottlenecks, ...reflectionFindings];
+            streamLine(controller, { type: "status", message: "Generating diagram…" });
+            const diagram = await generateMermaidDiagram(arch.systemComponents);
+            streamLine(controller, { type: "result", data: { ...arch, diagram } });
+            controller.close();
+            return;
+          }
 
-          const subqueries = await decomposeQuery(trimmed);
-
-          streamChunk(
-            controller,
-            JSON.stringify({ type: "status", message: "Retrieving sources…" }) + "\n"
-          );
-
-          const resultsArrays = await Promise.all(
-            subqueries.map((sub) => search(sub))
-          );
-          const combined = resultsArrays.flat();
-          const deduplicated = deduplicateByUrl(combined);
-          const topSources = deduplicated.slice(0, 8);
-
-          streamChunk(
-            controller,
-            JSON.stringify({ type: "status", message: "Synthesizing analysis…" }) + "\n"
-          );
-
-          const synthesis = await synthesizeResearch(trimmed, topSources);
-          const confidenceScore = calculateConfidence(topSources, synthesis);
-          const confidence =
-            Math.round((confidenceScore / 10) * 100) / 100;
-
-          const reasoningChain = [
-            `Decomposed query into ${subqueries.length} subquer${subqueries.length === 1 ? "y" : "ies"}.`,
-            `Retrieved ${topSources.length} sources in parallel from search.`,
-            `Synthesized evidence into summary and insights.`,
-            synthesis.contradictions.length > 0
-              ? `Flagged ${synthesis.contradictions.length} contradiction${synthesis.contradictions.length === 1 ? "" : "s"} across sources.`
-              : "No contradictions flagged across sources.",
-          ];
-
-          const result = {
-            summary: synthesis.summary,
-            keyInsights: synthesis.keyInsights,
-            contradictions: synthesis.contradictions,
-            confidence,
-            sources: topSources.map((r) => ({
-              title: r.title,
-              url: r.url,
-              snippet: r.snippet,
-            })),
-            limitations: synthesis.limitations,
-            reasoningChain,
-          };
-
-          await setCached(trimmed, result);
-
-          streamChunk(
-            controller,
-            JSON.stringify({ type: "result", data: result, fromCache: false }) + "\n"
-          );
+          // general
+          streamLine(controller, { type: "status", message: "Answering…" });
+          const answer = await getGeneralAnswer(trimmed);
+          streamLine(controller, { type: "result", data: { mode: "general", answer } });
           controller.close();
         } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "Research failed.";
-          streamChunk(
-            controller,
-            JSON.stringify({ type: "error", error: message }) + "\n"
-          );
+          const message = err instanceof Error ? err.message : "Request failed.";
+          streamLine(controller, { type: "error", error: message });
           controller.close();
         }
       },

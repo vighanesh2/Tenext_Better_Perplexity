@@ -3,7 +3,15 @@
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
-export function Navbar({ onBack }: { onBack?: () => void }) {
+export function Navbar({
+  onBack,
+  notebookOpen,
+  onToggleNotebook,
+}: {
+  onBack?: () => void;
+  notebookOpen?: boolean;
+  onToggleNotebook?: () => void;
+}) {
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -35,6 +43,17 @@ export function Navbar({ onBack }: { onBack?: () => void }) {
         <span className="text-sm font-medium text-white/90 tracking-tight">Research</span>
       </div>
       <div className="flex items-center gap-4">
+        {onToggleNotebook != null && (
+          <button
+            type="button"
+            onClick={onToggleNotebook}
+            className={`text-sm transition-colors ${
+              notebookOpen ? "text-white/90" : "text-white/60 hover:text-white/90"
+            }`}
+          >
+            Notebook
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSignOut}

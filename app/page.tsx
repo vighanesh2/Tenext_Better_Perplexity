@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import ChatClient from "@/components/chat/ChatClient";
+import WorkspaceLayout from "@/components/WorkspaceLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      <ChatClient />
+      <WorkspaceLayout />
     </div>
   );
 }
